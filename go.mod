@@ -1,4 +1,4 @@
-module github.com/fadhilthomas/go-postgres-exporter
+module github.com/fadhilthomas/go-postgres-query-exporter
 
 go 1.16
 
