@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"github.com/fadhilthomas/go-postgres-query-exporter/config"
 	"github.com/hpcloud/tail"
@@ -22,7 +21,7 @@ func checkFileName(filename string, f chan<- string) {
 
 		// if detect new filename, send to channel
 		if newFilename != filename {
-			log.Debug().Str("file", "main").Msg(newFilename)
+			log.Info().Str("file", "main").Msg(newFilename)
 			f <- newFilename
 			return
 		}
@@ -39,7 +38,7 @@ func listenLog() {
 
 		logTail, err := tail.TailFile(filename, tail.Config{Follow: true, ReOpen: true, MustExist: true})
 		if err != nil {
-			log.Debug().Str("file", "main").Msg(fmt.Sprintf("no log file %s. waiting for 1 minute", filename))
+			log.Error().Str("file", "main").Msg(fmt.Sprintf("no log file %s. waiting for 1 minute", filename))
 			time.Sleep(time.Minute * 1)
 			continue
 		}
@@ -52,7 +51,7 @@ func listenLog() {
 			for {
 				select {
 				case name := <-fileNameChan:
-					log.Debug().Str("file", "main").Msg(fmt.Sprintf("received a new name for log: %s", name))
+					log.Info().Str("file", "main").Msg(fmt.Sprintf("received a new name for log: %s", name))
 					err := logTail.Stop()
 					if err != nil {
 						log.Error().Stack().Str("file", "main").Msg(err.Error())
@@ -92,11 +91,10 @@ func listenLog() {
 }
 
 func setLogLevel(){
-	debug := flag.Bool("debug", false, "sets log level to debug")
-	flag.Parse()
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	if *debug {
+	if config.Get(config.LOG_FILE) == "debug"{
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
 }
 
@@ -136,7 +134,7 @@ func main() {
 	initMetric()
 	go listenLog()
 
-	log.Info().Str("file", "main").Msg("serving requests on port 9000")
+	log.Info().Str("file", "main").Msg("serving requests on port 9080")
 	err := http.ListenAndServe(":9080", nil)
 	if err != nil {
 		log.Error().Stack().Str("file", "main").Msg(err.Error())
