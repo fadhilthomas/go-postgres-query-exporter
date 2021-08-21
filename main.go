@@ -93,7 +93,7 @@ var (
 		Name: "version",
 		Help: "Version information about this exporter",
 		ConstLabels: map[string]string{
-			"redis_exporter_build_info": appVersion,
+			"postgres_query_exporter_build_info": appVersion,
 		},
 	})
 
