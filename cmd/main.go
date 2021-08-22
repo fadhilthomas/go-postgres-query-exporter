@@ -91,7 +91,7 @@ func listenLog() {
 }
 
 func setLogLevel(){
-	if config.Get(config.LOG_FILE) == "debug"{
+	if config.Get(config.LOG_LEVEL) == "debug"{
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	} else {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
