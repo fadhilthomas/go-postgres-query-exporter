@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/fadhilthomas/go-postgres-query-exporter/config"
+	"github.com/google/gops/agent"
 	"github.com/hpcloud/tail"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -10,21 +11,26 @@ import (
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 )
 
 func checkFileName(filename string, f chan<- string) {
+	timezone, err := time.ParseDuration(config.Get(config.LOG_TIMEZONE))
+	if err != nil {
+		log.Error().Stack().Str("file", "main").Msg(err.Error())
+	}
 	for {
-		newFilename := fmt.Sprintf("%v", time.Now().Format(config.Get(config.LOG_FILE)+"postgresql-2006-01-02.log"))
+		newFilename := fmt.Sprintf("%v", time.Now().Add(timezone).Format(config.Get(config.LOG_FILE)+"postgresql-2006-01-02.log"))
 
 		// if detect new filename, send to channel
 		if newFilename != filename {
-			log.Info().Str("file", "main").Msg(newFilename)
 			f <- newFilename
 			return
 		}
+		time.Sleep(time.Minute)
 	}
 }
 
@@ -33,8 +39,14 @@ func listenLog() {
 	var reError = regexp.MustCompile("(error|fatal)")
 	fileNameChan := make(chan string)
 
+	timezone, err := time.ParseDuration(config.Get(config.LOG_TIMEZONE))
+	if err != nil {
+		log.Error().Stack().Str("file", "main").Msg(err.Error())
+	}
+
 	for {
-		filename := fmt.Sprintf("%v", time.Now().Format(config.Get(config.LOG_FILE)+"postgresql-2006-01-02.log"))
+		filename := fmt.Sprintf("%v", time.Now().Add(timezone).Format(config.Get(config.LOG_FILE)+"postgresql-2006-01-02.log"))
+		log.Debug().Str("file", "main").Msg(fmt.Sprintf("log processed: %s", filename))
 
 		logTail, err := tail.TailFile(filename, tail.Config{Follow: true, ReOpen: true, MustExist: true})
 		if err != nil {
@@ -77,7 +89,7 @@ func listenLog() {
 					log.Error().Stack().Str("file", "main").Msg(err.Error())
 				}
 				queryHistogram.WithLabelValues(reSelect.FindStringSubmatch(lineLow)[2]).Observe(duration / 1000)
-				log.Debug().Str("file", "main").Msg(fmt.Sprintf("%s: %s", reSelect.FindStringSubmatch(lineLow)[1],reSelect.FindStringSubmatch(lineLow)[2]))
+				log.Debug().Str("file", "main").Msg(fmt.Sprintf("%s: %s", reSelect.FindStringSubmatch(lineLow)[1], reSelect.FindStringSubmatch(lineLow)[2]))
 			}
 
 			// check if log contain error
@@ -90,15 +102,24 @@ func listenLog() {
 	}
 }
 
-func setLogLevel(){
-	if config.Get(config.LOG_LEVEL) == "debug"{
+func initMain() {
+	config.Set(config.LOG_LEVEL, "info")
+	config.Set(config.LOG_TIMEZONE, "0h")
+	if config.Get(config.LOG_LEVEL) == "debug" {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	} else {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
+
+	runtime.GOMAXPROCS(1)
+	if err := agent.Listen(agent.Options{
+		ShutdownCleanup: true, // automatically closes on os.Interrupt
+	}); err != nil {
+		log.Error().Stack().Str("file", "main").Msg(err.Error())
+	}
 }
 
-func initMetric()  {
+func initMetric() {
 	http.Handle("/metrics", promhttp.Handler())
 	prometheus.MustRegister(version)
 	prometheus.MustRegister(queryCounter)
@@ -124,13 +145,13 @@ var (
 
 	queryHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "postgres",
-		Name:        "query_duration_seconds",
-		Help:        "Postgres query duration in seconds",
+		Name:      "query_duration_seconds",
+		Help:      "Postgres query duration in seconds",
 	}, []string{"query"})
 )
 
 func main() {
-	setLogLevel()
+	initMain()
 	initMetric()
 	go listenLog()
 
