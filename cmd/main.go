@@ -35,7 +35,7 @@ func checkFileName(filename string, f chan<- string) {
 }
 
 func listenLog() {
-	var reSelect = regexp.MustCompile("duration: ([0-9]+.[0-9]+) ms {2}statement: (select|update|delete)")
+	var reSelect = regexp.MustCompile("duration: ([0-9]+.[0-9]+) ms {2}statement: (select|update|delete|insert)")
 	var reError = regexp.MustCompile("(error|fatal)")
 	fileNameChan := make(chan string)
 
