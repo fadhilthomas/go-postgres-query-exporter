@@ -35,7 +35,7 @@ func checkFileName(filename string, f chan<- string) {
 }
 
 func listenLog() {
-	var reSelect = regexp.MustCompile("db=([a-z]+).*duration: ([0-9]+.[0-9]+) ms {2}statement: (select|update|delete|insert)")
+	var reQuery = regexp.MustCompile("db=([a-z]+).*duration: ([0-9]+.[0-9]+) ms {2}statement: (select|update|delete|insert)")
 	var reError = regexp.MustCompile("db=([a-z]+).*(error|fatal)")
 	fileNameChan := make(chan string)
 
@@ -79,28 +79,34 @@ func listenLog() {
 		}
 		for line := range logTail.Lines {
 			lineLow := strings.ToLower(line.Text)
-			ddlMatch := reSelect.MatchString(lineLow)
+			ddlMatch := reQuery.MatchString(lineLow)
 
 			// check if log contain ddl query
 			if ddlMatch == true {
-				queryLog := reSelect.FindStringSubmatch(lineLow)[3]
-				databaseLog := reSelect.FindStringSubmatch(lineLow)[1]
-				queryCounter.WithLabelValues(databaseLog, queryLog).Inc()
-				durationLog, err := strconv.ParseFloat(reSelect.FindStringSubmatch(lineLow)[2], 64)
-				if err != nil {
-					log.Error().Stack().Str("file", "main").Msg(err.Error())
+				queryExt := reQuery.FindStringSubmatch(lineLow)
+				if len(queryExt) == 4 {
+					queryLog := queryExt[3]
+					databaseLog := queryExt[1]
+					queryCounter.WithLabelValues(databaseLog, queryLog).Inc()
+					durationLog, err := strconv.ParseFloat(queryExt[2], 64)
+					if err != nil {
+						log.Error().Stack().Str("file", "main").Msg(err.Error())
+					}
+					queryHistogram.WithLabelValues(databaseLog, queryLog).Observe(durationLog / 1000)
+					log.Debug().Str("file", "main").Msg(fmt.Sprintf("db=%s,duration=%.2f,query=%s", databaseLog, durationLog, queryLog))
 				}
-				queryHistogram.WithLabelValues(databaseLog, queryLog).Observe(durationLog / 1000)
-				log.Debug().Str("file", "main").Msg(fmt.Sprintf("db=%s,duration=%.2f,query=%s", databaseLog, durationLog, queryLog))
 			}
 
 			// check if log contain error
 			errMatch := reError.MatchString(lineLow)
 			if errMatch == true {
-				databaseLog := reSelect.FindStringSubmatch(lineLow)[1]
-				errorLog := reError.FindStringSubmatch(lineLow)[2]
-				queryCounter.WithLabelValues(databaseLog, errorLog).Inc()
-				log.Debug().Str("file", "main").Msg(errorLog)
+				errorExt := reError.FindStringSubmatch(lineLow)
+				if len(errorExt) == 3 {
+					databaseLog := errorExt[1]
+					errorLog := errorExt[2]
+					queryCounter.WithLabelValues(databaseLog, errorLog).Inc()
+					log.Debug().Str("file", "main").Msg(errorLog)
+				}
 			}
 		}
 	}
