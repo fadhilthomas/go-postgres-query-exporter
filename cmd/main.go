@@ -35,8 +35,8 @@ func checkFileName(filename string, f chan<- string) {
 }
 
 func listenLog() {
-	var reSelect = regexp.MustCompile("duration: ([0-9]+.[0-9]+) ms {2}statement: (select|update|delete|insert)")
-	var reError = regexp.MustCompile("(error|fatal)")
+	var reSelect = regexp.MustCompile("db=([a-z]+).*duration: ([0-9]+.[0-9]+) ms {2}statement: (select|update|delete|insert)")
+	var reError = regexp.MustCompile("db=([a-z]+).*(error|fatal)")
 	fileNameChan := make(chan string)
 
 	timezone, err := time.ParseDuration(config.Get(config.LOG_TIMEZONE))
@@ -51,7 +51,7 @@ func listenLog() {
 		logTail, err := tail.TailFile(filename, tail.Config{Follow: true, ReOpen: true, MustExist: true})
 		if err != nil {
 			log.Error().Str("file", "main").Msg(fmt.Sprintf("no log file %s. waiting for 1 minute", filename))
-			time.Sleep(time.Minute * 1)
+			time.Sleep(time.Minute * 30)
 			continue
 		}
 
@@ -83,20 +83,24 @@ func listenLog() {
 
 			// check if log contain ddl query
 			if ddlMatch == true {
-				queryCounter.WithLabelValues(reSelect.FindStringSubmatch(lineLow)[2]).Inc()
-				duration, err := strconv.ParseFloat(reSelect.FindStringSubmatch(lineLow)[1], 64)
+				queryLog := reSelect.FindStringSubmatch(lineLow)[3]
+				databaseLog := reSelect.FindStringSubmatch(lineLow)[1]
+				queryCounter.WithLabelValues(databaseLog, queryLog).Inc()
+				durationLog, err := strconv.ParseFloat(reSelect.FindStringSubmatch(lineLow)[2], 64)
 				if err != nil {
 					log.Error().Stack().Str("file", "main").Msg(err.Error())
 				}
-				queryHistogram.WithLabelValues(reSelect.FindStringSubmatch(lineLow)[2]).Observe(duration / 1000)
-				log.Debug().Str("file", "main").Msg(fmt.Sprintf("%s: %s", reSelect.FindStringSubmatch(lineLow)[1], reSelect.FindStringSubmatch(lineLow)[2]))
+				queryHistogram.WithLabelValues(databaseLog, queryLog).Observe(durationLog / 1000)
+				log.Debug().Str("file", "main").Msg(fmt.Sprintf("db=%s,duration=%.2f,query=%s", databaseLog, durationLog, queryLog))
 			}
 
 			// check if log contain error
 			errMatch := reError.MatchString(lineLow)
 			if errMatch == true {
-				queryCounter.WithLabelValues(reError.FindStringSubmatch(lineLow)[1]).Inc()
-				log.Debug().Str("file", "main").Msg(reError.FindStringSubmatch(lineLow)[1])
+				databaseLog := reSelect.FindStringSubmatch(lineLow)[1]
+				errorLog := reError.FindStringSubmatch(lineLow)[2]
+				queryCounter.WithLabelValues(databaseLog, errorLog).Inc()
+				log.Debug().Str("file", "main").Msg(errorLog)
 			}
 		}
 	}
@@ -141,13 +145,13 @@ var (
 			Namespace: "postgres",
 			Name:      "query_total",
 			Help:      "Postgres query total calls",
-		}, []string{"query"})
+		}, []string{"database", "query"})
 
 	queryHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "postgres",
 		Name:      "query_duration_seconds",
 		Help:      "Postgres query duration in seconds",
-	}, []string{"query"})
+	}, []string{"database", "query"})
 )
 
 func main() {
