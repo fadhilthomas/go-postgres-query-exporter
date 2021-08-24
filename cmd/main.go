@@ -35,7 +35,7 @@ func checkFileName(filename string, f chan<- string) {
 }
 
 func listenLog() {
-	var reQuery = regexp.MustCompile("db=([a-z]+).*duration: ([0-9]+.[0-9]+) ms {2}statement: (select|update|delete|insert)")
+	var reQuery = regexp.MustCompile("db=([a-z]+).*duration: ([0-9]+.[0-9]+) ms {2}(statement|parse.*|bind.*|execute.*): (select|update|delete|insert)")
 	var reError = regexp.MustCompile("db=([a-z]+).*(error|fatal)")
 	fileNameChan := make(chan string)
 
@@ -84,8 +84,8 @@ func listenLog() {
 			// check if log contain ddl query
 			if ddlMatch == true {
 				queryExt := reQuery.FindStringSubmatch(lineLow)
-				if len(queryExt) == 4 {
-					queryLog := queryExt[3]
+				if len(queryExt) == 5 {
+					queryLog := queryExt[4]
 					databaseLog := queryExt[1]
 					queryCounter.WithLabelValues(databaseLog, queryLog).Inc()
 					durationLog, err := strconv.ParseFloat(queryExt[2], 64)
