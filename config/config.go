@@ -6,4 +6,5 @@ var base = mergeConfig(
 	logTimezoneConfig,
 	logIntervalConfig,
 	rateLimitConfig,
+	rateIntervalConfig,
 )
