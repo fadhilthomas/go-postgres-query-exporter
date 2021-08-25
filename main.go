@@ -47,9 +47,9 @@ func listenLog() {
 		log.Debug().Str("file", "main").Msg(fmt.Sprintf("log processed: %s", filename))
 
 		tailConfig := tail.Config{
-			Follow:	true,
-			ReOpen: true,
-			MustExist: true,
+			Follow:      true,
+			ReOpen:      true,
+			MustExist:   true,
 			RateLimiter: ratelimiter.NewLeakyBucket(uint16(config.GetInt(config.RATE_LIMIT)), time.Second),
 		}
 
