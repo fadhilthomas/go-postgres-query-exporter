@@ -82,7 +82,7 @@ func listenLog() {
 			ddlMatch := reQuery.MatchString(lineLow)
 
 			// check if log contain ddl query
-			if ddlMatch == true {
+			if ddlMatch {
 				queryExt := reQuery.FindStringSubmatch(lineLow)
 				if len(queryExt) == 5 {
 					queryLog := queryExt[4]
@@ -99,7 +99,7 @@ func listenLog() {
 
 			// check if log contain error
 			errMatch := reError.MatchString(lineLow)
-			if errMatch == true {
+			if errMatch {
 				errorExt := reError.FindStringSubmatch(lineLow)
 				if len(errorExt) == 3 {
 					databaseLog := errorExt[1]
