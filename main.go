@@ -50,7 +50,7 @@ func listenLog() {
 			Follow:      true,
 			ReOpen:      true,
 			MustExist:   true,
-			RateLimiter: ratelimiter.NewLeakyBucket(uint16(config.GetInt(config.RATE_LIMIT)), time.Second),
+			RateLimiter: ratelimiter.NewLeakyBucket(uint16(config.GetInt(config.RATE_LIMIT)), config.GetDuration(config.RATE_INTERVAL)),
 		}
 
 		logTail, err := tail.TailFile(filename, tailConfig)
