@@ -1,10 +1,10 @@
-name: Docker Image CI
+name: ci
 
 on:
   push:
-    branches: [ release ]
+    branches: [ main ]
   pull_request:
-    branches: [ release ]
+    branches: [ main ]
 
 jobs:
   build:
