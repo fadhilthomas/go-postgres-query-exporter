@@ -5,6 +5,7 @@ import (
 	"github.com/fadhilthomas/go-postgres-query-exporter/config"
 	"github.com/google/gops/agent"
 	"github.com/hpcloud/tail"
+	"github.com/hpcloud/tail/ratelimiter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
@@ -18,19 +19,19 @@ import (
 )
 
 func checkFileName(filename string, f chan<- string) {
-	timezone, err := time.ParseDuration(config.Get(config.LOG_TIMEZONE))
+	timezone, err := time.ParseDuration(config.GetStr(config.LOG_TIMEZONE))
 	if err != nil {
 		log.Error().Stack().Str("file", "main").Msg(err.Error())
 	}
 	for {
-		newFilename := fmt.Sprintf("%v", time.Now().Add(timezone).Format(config.Get(config.LOG_FILE)+"postgresql-2006-01-02.log"))
+		newFilename := fmt.Sprintf("%v", time.Now().Add(timezone).Format(config.GetStr(config.LOG_FILE)+"postgresql-2006-01-02.log"))
 
 		// if detect new filename, send to channel
 		if newFilename != filename {
 			f <- newFilename
 			return
 		}
-		time.Sleep(time.Minute)
+		time.Sleep(config.GetDuration(config.LOG_INTERVAL))
 	}
 }
 
@@ -39,19 +40,23 @@ func listenLog() {
 	var reError = regexp.MustCompile("db=([a-z]+).*(error|fatal)")
 	fileNameChan := make(chan string)
 
-	timezone, err := time.ParseDuration(config.Get(config.LOG_TIMEZONE))
-	if err != nil {
-		log.Error().Stack().Str("file", "main").Msg(err.Error())
-	}
+	timezone := config.GetDuration(config.LOG_TIMEZONE)
 
 	for {
-		filename := fmt.Sprintf("%v", time.Now().Add(timezone).Format(config.Get(config.LOG_FILE)+"postgresql-2006-01-02.log"))
+		filename := fmt.Sprintf("%v", time.Now().Add(timezone).Format(config.GetStr(config.LOG_FILE)+"postgresql-2006-01-02.log"))
 		log.Debug().Str("file", "main").Msg(fmt.Sprintf("log processed: %s", filename))
 
-		logTail, err := tail.TailFile(filename, tail.Config{Follow: true, ReOpen: true, MustExist: true})
+		tailConfig := tail.Config{
+			Follow:      true,
+			ReOpen:      true,
+			MustExist:   true,
+			RateLimiter: ratelimiter.NewLeakyBucket(uint16(config.GetInt(config.RATE_LIMIT)), time.Second),
+		}
+
+		logTail, err := tail.TailFile(filename, tailConfig)
 		if err != nil {
-			log.Error().Str("file", "main").Msg(fmt.Sprintf("no log file %s. waiting for 1 minute", filename))
-			time.Sleep(time.Minute * 30)
+			log.Error().Str("file", "main").Msg(fmt.Sprintf("no log file %s. waiting for %s minute", filename, config.GetStr(config.LOG_INTERVAL)))
+			time.Sleep(config.GetDuration(config.LOG_INTERVAL))
 			continue
 		}
 
@@ -65,6 +70,7 @@ func listenLog() {
 				case name := <-fileNameChan:
 					log.Info().Str("file", "main").Msg(fmt.Sprintf("received a new name for log: %s", name))
 					err := logTail.Stop()
+					logTail.Cleanup()
 					if err != nil {
 						log.Error().Stack().Str("file", "main").Msg(err.Error())
 						return
@@ -115,7 +121,7 @@ func listenLog() {
 func initMain() {
 	config.Set(config.LOG_LEVEL, "info")
 	config.Set(config.LOG_TIMEZONE, "0h")
-	if config.Get(config.LOG_LEVEL) == "debug" {
+	if config.GetStr(config.LOG_LEVEL) == "debug" {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	} else {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
