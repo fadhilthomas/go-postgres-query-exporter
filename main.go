@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/fadhilthomas/go-postgres-query-exporter/config"
-	"github.com/google/gops/agent"
 	"github.com/hpcloud/tail"
 	"github.com/hpcloud/tail/ratelimiter"
 	"github.com/prometheus/client_golang/prometheus"
@@ -11,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	_ "net/http/pprof"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -146,11 +146,6 @@ func initMain() {
 	}
 
 	runtime.GOMAXPROCS(1)
-	if err := agent.Listen(agent.Options{
-		ShutdownCleanup: true, // automatically closes on os.Interrupt
-	}); err != nil {
-		log.Error().Stack().Str("file", "main").Msg(err.Error())
-	}
 }
 
 func initMetric() {
