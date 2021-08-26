@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	rePreQuery = regexp.MustCompile(`^\d{4}-\d{2}-\d{1,2} \d{2}:\d{2}:\d{2} [a-z]{3} \[\d+]: db=(\w+),user=(?:\w+-+)+\w+,app=\[\w+],client=\d+.\d+.\d+.\d+ log: {2}duration: ([0-9]+.[0-9]+) ms`)
-	reError    = regexp.MustCompile(`^\d{4}-\d{2}-\d{1,2} \d{2}:\d{2}:\d{2} [a-z]{3} \[\d+]: db=(\w+),user=(?:\w+-+)+\w+,app=\[\w+],client=\d+.\d+.\d+.\d+ error`)
+	rePreQuery = regexp.MustCompile(`^\d{4}-\d{2}-\d{1,2} \d{2}:\d{2}:\d{2} [a-z]{3} \[\d+]: db=((?:\w+|-+)+\w+),user=(?:\w+|-+)+\w+,app=\[\w+],client=\d+.\d+.\d+.\d+ log: {2}duration: ([0-9]+.[0-9]+) ms`)
+	reError    = regexp.MustCompile(`^\d{4}-\d{2}-\d{1,2} \d{2}:\d{2}:\d{2} [a-z]{3} \[\d+]: db=((?:\w+|-+)+\w+),user=(?:\w+|-+)+\w+,app=\[\w+],client=\d+.\d+.\d+.\d+ error`)
 	reQuery    = regexp.MustCompile(`(select|update|delete|insert)`)
 )
 
