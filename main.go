@@ -20,8 +20,8 @@ import (
 
 var (
 	rePreQuery = regexp.MustCompile(`^\d{4}-\d{2}-\d{1,2} \d{2}:\d{2}:\d{2} [a-z]{3} \[\d+]: db=(\w+),user=(?:\w+-)+\w+,app=\[\w+],client=\d+.\d+.\d+.\d+ log: {2}duration: ([0-9]+.[0-9]+) ms`)
-	reError = regexp.MustCompile(`^\d{4}-\d{2}-\d{1,2} \d{2}:\d{2}:\d{2} [a-z]{3} \[\d+]: db=(\w+),user=(?:\w+-)+\w+,app=\[\w+],client=\d+.\d+.\d+.\d+ error`)
-	reQuery = regexp.MustCompile(`(select|update|delete|insert)`)
+	reError    = regexp.MustCompile(`^\d{4}-\d{2}-\d{1,2} \d{2}:\d{2}:\d{2} [a-z]{3} \[\d+]: db=(\w+),user=(?:\w+-)+\w+,app=\[\w+],client=\d+.\d+.\d+.\d+ error`)
+	reQuery    = regexp.MustCompile(`(select|update|delete|insert)`)
 )
 
 func checkFileName(filename string, f chan<- string) {
@@ -102,36 +102,12 @@ func listenLog() {
 				errorMap["error"] = "error"
 			}
 
-			queryExt := reQuery.FindStringSubmatch(lineLow)
-			if len(queryExt) == 2 {
-				queryMap["query"] = queryExt[1]
+			if len(queryMap) == 2 {
+				queryExt := reQuery.FindStringSubmatch(lineLow)
+				if len(queryExt) == 2 {
+					queryMap["query"] = queryExt[1]
+				}
 			}
-
-			//dateMatch := reDate.MatchString(lineLow)
-			//if dateMatch {
-			//	queryMap = make(map[string]string)
-			//	errorMap = make(map[string]string)
-			//
-			//	preQueryExt := rePreQuery.FindStringSubmatch(lineLow)
-			//	if len(preQueryExt) == 3 {
-			//		queryMap["database"] = preQueryExt[1]
-			//		queryMap["duration"] = preQueryExt[2]
-			//	}
-			//
-			//	errorExt := reError.FindStringSubmatch(lineLow)
-			//	if len(errorExt) == 2 {
-			//		errorMap["database"] = errorExt[1]
-			//		errorMap["error"] = "error"
-			//	}
-			//}
-			//
-			//queryMatch := reQuery.MatchString(lineLow)
-			//if queryMatch {
-			//	queryExt := reQuery.FindStringSubmatch(lineLow)
-			//	if len(queryExt) == 2 {
-			//		queryMap["query"] = queryExt[1]
-			//	}
-			//}
 
 			if len(queryMap) == 3 {
 				queryCounter.WithLabelValues(queryMap["database"], queryMap["query"]).Inc()
