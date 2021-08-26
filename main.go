@@ -36,8 +36,15 @@ func checkFileName(filename string, f chan<- string) {
 }
 
 func listenLog() {
-	var reQuery = regexp.MustCompile("db=([a-z]+).*duration: ([0-9]+.[0-9]+) ms {2}(statement|parse.*|bind.*|execute.*):\\s+(select|update|delete|insert)")
-	var reError = regexp.MustCompile("db=([a-z]+).*(error|fatal)")
+	var reDate = regexp.MustCompile(`(\\d{4}-\\d{2}-\\d{1,2})`)
+	var reDatabase = regexp.MustCompile("db=([a-z]+)")
+	var reDuration = regexp.MustCompile("duration: ([0-9]+.[0-9]+) ms")
+	var reQuery = regexp.MustCompile("(select|update|delete|insert)")
+	var reError = regexp.MustCompile("(error|fatal)")
+
+	queryMap := make(map[string]string)
+	errorMap := make(map[string]string)
+
 	fileNameChan := make(chan string)
 
 	timezone := config.GetDuration(config.LOG_TIMEZONE)
@@ -85,34 +92,45 @@ func listenLog() {
 		}
 		for line := range logTail.Lines {
 			lineLow := strings.ToLower(line.Text)
-			ddlMatch := reQuery.MatchString(lineLow)
 
-			// check if log contain ddl query
-			if ddlMatch {
-				queryExt := reQuery.FindStringSubmatch(lineLow)
-				if len(queryExt) == 5 {
-					queryLog := queryExt[4]
-					databaseLog := queryExt[1]
-					queryCounter.WithLabelValues(databaseLog, queryLog).Inc()
-					durationLog, err := strconv.ParseFloat(queryExt[2], 64)
-					if err != nil {
-						log.Error().Stack().Str("file", "main").Msg(err.Error())
-					}
-					queryHistogram.WithLabelValues(databaseLog, queryLog).Observe(durationLog / 1000)
-					log.Debug().Str("file", "main").Msg(fmt.Sprintf("db=%s,duration=%.2f,query=%s", databaseLog, durationLog, queryLog))
-				}
+			dateStr := reDate.FindStringSubmatch(lineLow)
+			if len(dateStr) > 0 {
+				queryMap = make(map[string]string)
+				errorMap = make(map[string]string)
 			}
 
-			// check if log contain error
-			errMatch := reError.MatchString(lineLow)
-			if errMatch {
-				errorExt := reError.FindStringSubmatch(lineLow)
-				if len(errorExt) == 3 {
-					databaseLog := errorExt[1]
-					errorLog := errorExt[2]
-					queryCounter.WithLabelValues(databaseLog, errorLog).Inc()
-					log.Debug().Str("file", "main").Msg(errorLog)
+			databaseStr := reDatabase.FindStringSubmatch(lineLow)
+			if len(databaseStr) > 0 {
+				queryMap["database"] = databaseStr[1]
+				errorMap["database"] = databaseStr[1]
+			}
+			durationStr := reDuration.FindStringSubmatch(lineLow)
+			if len(durationStr) > 0 {
+				queryMap["duration"] = durationStr[1]
+			}
+			queryStr := reQuery.FindStringSubmatch(lineLow)
+			if len(queryStr) > 0 {
+				queryMap["query"] = queryStr[1]
+			}
+			errorStr := reError.FindStringSubmatch(lineLow)
+			if len(errorStr) > 0 {
+				errorMap["error"] = errorStr[1]
+			}
+
+			if len(queryMap) == 3 {
+				queryCounter.WithLabelValues(queryMap["database"], queryMap["query"]).Inc()
+				durationLog, err := strconv.ParseFloat(queryMap["duration"], 64)
+				if err != nil {
+					log.Error().Stack().Str("file", "main").Msg(err.Error())
 				}
+				queryHistogram.WithLabelValues(queryMap["database"], queryMap["query"]).Observe(durationLog / 1000)
+				log.Debug().Str("file", "main").Msg(fmt.Sprintf("db=%s,duration=%.2f,query=%s", queryMap["database"], durationLog, queryMap["query"]))
+				queryMap = make(map[string]string)
+			}
+			if len(errorMap) == 2 {
+				queryCounter.WithLabelValues(errorMap["database"], errorMap["error"]).Inc()
+				log.Debug().Str("file", "main").Msg(fmt.Sprintf("db=%s,error=%s", errorMap["database"], errorMap["error"]))
+				errorMap = make(map[string]string)
 			}
 		}
 	}
