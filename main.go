@@ -18,6 +18,12 @@ import (
 	"time"
 )
 
+var (
+	rePreQuery = regexp.MustCompile(`^\d{4}-\d{2}-\d{1,2} \d{2}:\d{2}:\d{2} [a-z]{3} \[\d+]: db=(\w+),user=(?:\w+-)+\w+,app=\[\w+],client=\d+.\d+.\d+.\d+ log: {2}duration: ([0-9]+.[0-9]+) ms`)
+	reError    = regexp.MustCompile(`^\d{4}-\d{2}-\d{1,2} \d{2}:\d{2}:\d{2} [a-z]{3} \[\d+]: db=(\w+),user=(?:\w+-)+\w+,app=\[\w+],client=\d+.\d+.\d+.\d+ error`)
+	reQuery    = regexp.MustCompile(`(select|update|delete|insert)`)
+)
+
 func checkFileName(filename string, f chan<- string) {
 	timezone, err := time.ParseDuration(config.GetStr(config.LOG_TIMEZONE))
 	if err != nil {
@@ -36,21 +42,13 @@ func checkFileName(filename string, f chan<- string) {
 }
 
 func listenLog() {
-	var reDate = regexp.MustCompile(`(\\d{4}-\\d{2}-\\d{1,2})`)
-	var reDatabase = regexp.MustCompile("db=([a-z]+)")
-	var reDuration = regexp.MustCompile("duration: ([0-9]+.[0-9]+) ms")
-	var reQuery = regexp.MustCompile("(select|update|delete|insert)")
-	var reError = regexp.MustCompile("(error|fatal)")
-
 	queryMap := make(map[string]string)
 	errorMap := make(map[string]string)
 
 	fileNameChan := make(chan string)
 
-	timezone := config.GetDuration(config.LOG_TIMEZONE)
-
 	for {
-		filename := fmt.Sprintf("%v", time.Now().Add(timezone).Format(config.GetStr(config.LOG_FILE)+"postgresql-2006-01-02.log"))
+		filename := fmt.Sprintf("%v", time.Now().Add(config.GetDuration(config.LOG_TIMEZONE)).Format(config.GetStr(config.LOG_FILE)+"postgresql-2006-01-02.log"))
 		log.Debug().Str("file", "main").Msg(fmt.Sprintf("log processed: %s", filename))
 
 		tailConfig := tail.Config{
@@ -87,34 +85,28 @@ func listenLog() {
 			}
 		}()
 
-		if err != nil {
-			log.Error().Stack().Str("file", "main").Msg(err.Error())
-		}
 		for line := range logTail.Lines {
 			lineLow := strings.ToLower(line.Text)
 
-			dateStr := reDate.FindStringSubmatch(lineLow)
-			if len(dateStr) > 0 {
+			preQueryExt := rePreQuery.FindStringSubmatch(lineLow)
+			if len(preQueryExt) == 3 {
 				queryMap = make(map[string]string)
-				errorMap = make(map[string]string)
+				queryMap["database"] = preQueryExt[1]
+				queryMap["duration"] = preQueryExt[2]
 			}
 
-			databaseStr := reDatabase.FindStringSubmatch(lineLow)
-			if len(databaseStr) > 0 {
-				queryMap["database"] = databaseStr[1]
-				errorMap["database"] = databaseStr[1]
+			errorExt := reError.FindStringSubmatch(lineLow)
+			if len(errorExt) == 2 {
+				errorMap = make(map[string]string)
+				errorMap["database"] = errorExt[1]
+				errorMap["error"] = "error"
 			}
-			durationStr := reDuration.FindStringSubmatch(lineLow)
-			if len(durationStr) > 0 {
-				queryMap["duration"] = durationStr[1]
-			}
-			queryStr := reQuery.FindStringSubmatch(lineLow)
-			if len(queryStr) > 0 {
-				queryMap["query"] = queryStr[1]
-			}
-			errorStr := reError.FindStringSubmatch(lineLow)
-			if len(errorStr) > 0 {
-				errorMap["error"] = errorStr[1]
+
+			if len(queryMap) == 2 {
+				queryExt := reQuery.FindStringSubmatch(lineLow)
+				if len(queryExt) == 2 {
+					queryMap["query"] = queryExt[1]
+				}
 			}
 
 			if len(queryMap) == 3 {
@@ -144,7 +136,6 @@ func initMain() {
 	} else {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
-
 	runtime.GOMAXPROCS(1)
 }
 
