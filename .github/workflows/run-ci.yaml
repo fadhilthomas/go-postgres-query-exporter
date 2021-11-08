@@ -1,25 +1,29 @@
-name: ci
+---
+name: run-ci
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - name: checkout code
+        uses: actions/checkout@v2
+
       - name: docker login
         env:
           DOCKER_USER: ${{secrets.DOCKER_USER}}
           DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
         run: |
           docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
+
       - name: build docker image
-        run: docker build . --file Dockerfile --tag fadhilthomas/go-postgres-query-exporter:git-${{ github.sha }}
+        run: docker build . --file Dockerfile --tag fadhilthomas/go-postgres-query-exporter:git-${{
+          github.sha }}
 
       - name: docker push
         if: ${{ github.ref == 'refs/heads/main' }}
-        run: docker push fadhilthomas/go-postgres-query-exporter:git-${{ github.sha }}
+        run: docker push fadhilthomas/go-postgres-query-exporter:git-${{ github.sha
+          }}
